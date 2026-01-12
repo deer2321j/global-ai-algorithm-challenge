@@ -6,18 +6,18 @@
 ![Strategy](https://img.shields.io/badge/Strategy-Weighted%20Arbitration-red?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge)
 
-> 🏆 **决赛核心方案**: 本项目针对跨模态数据融合、用户冷启动及多模型集成中“概率分布不一致”的核心挑战，创新性地提出了**“加权投票为主、顺序仲裁为辅”**的双层集成框架。系统引入 **ResNet 残差思想** 解决集成退化问题，通过 Layer 1 的自校正与 Layer 2 的抗退化仲裁，最终实现高精度的图书借阅推荐。
+> 🏆 **决赛核心方案**: 本项目创新性地构建了**“双层加权投票仲裁架构”**。Layer 1 负责概率校准与子模型自校正，输出高质量基准；Layer 2 作为最终决策层，通过加权投票与顺序仲裁，为每个用户选出唯一且稳定的 Top-1 推荐。该方案完美解决了异构模型概率分布不一致的问题，实现了推荐准确率的稳步提升。
 
 ---
 
 ## 📖 目录 (Table of Contents)
 
-- [核心创新 (Key Innovations)](#-核心创新-key-innovations)
-- [系统架构 (System Architecture)](#-系统架构-system-architecture)
-- [技术深度解析 (Technical Deep Dive)](#-技术深度解析-technical-deep-dive)
-    - [Layer 1: 自校正与概率校准 (Self-Calibration)](#1-layer-1-自校正与概率校准-self-calibration)
-    - [Layer 2: 抗退化仲裁决策 (Anti-Degradation Arbitration)](#2-layer-2-抗退化仲裁决策-anti-degradation-arbitration)
+- [方案总览 (Overview)](#-方案总览-overview)
+- [核心设计理念 (Core Design Philosophy)](#-核心设计理念-core-design-philosophy)
+    - [Layer 1: 自校正 (Self-Calibration)](#1-layer-1-自校正-self-calibration)
+    - [Layer 2: 抗退化仲裁 (Anti-Degradation Arbitration)](#2-layer-2-抗退化仲裁-anti-degradation-arbitration)
     - [跨模型概率可比性校准 (Cross-Model Calibration)](#3-跨模型概率可比性校准-cross-model-calibration)
+- [系统架构 (System Architecture)](#-系统架构-system-architecture)
 - [快速开始 (Quick Start)](#-快速开始-quick-start)
 - [仓库结构 (Repository Layout)](#-仓库结构-repository-layout)
 - [完整复现 (Full Reproduction)](#-完整复现-full-reproduction)
@@ -25,23 +25,55 @@
 
 ---
 
-## ✨ 核心创新 (Key Innovations)
+## 🗺️ 方案总览 (Overview)
 
-### 1. 🛡️ 双层仲裁集成架构 (Two-Layer Arbitration Ensemble)
-*   **Layer 1 (概率校准与自校正)**: 负责输出高质量的子模型。针对同系列模型（如 `rv5` 不同参数版本）进行内部自洽性验证，提取“不变的稳定部分”赋予高权重，消除随机扰动。
-*   **Layer 2 (加权投票与仲裁)**: 作为最终决策层。通过加权投票为每个用户选出唯一且稳定的 Top-1 推荐。引入 **ResNet 跳连思想**，新模型以小权重接入，保证系统性能**单调不减**。
+针对赛题中跨模态特征提取困难、冷启动问题显著以及多模型融合尺度不一的核心挑战，本项目提出了**“加权投票为主、顺序仲裁为辅”**的双层集成框架：
 
-### 2. ⚖️ 跨模型概率可比性校准 (Probability Comparability)
-*   **痛点**: 异构模型（如 GNN vs GBDT）输出的概率分布差异巨大，直接融合会导致高置信度模型（即使是错误的）掩盖其他有效信号。
-*   **解决方案**:
-    *   **文件内标准化**: 消除模型内部的尺度差异。
-    *   **跨模型权重融合**: 仅基于验证集性能计算投票权重，**忽略单一模型的原始置信概率**，确保所有模型在公平的跑道上竞争，充分吸收互补性。
+*   **Layer 1 (概率校准)**: 子模型自校准，负责输出高质量的子模型。
+*   **Layer 2 (最终决策)**: 通过加权投票，为每个用户选出唯一且稳定的 Top-1 推荐。
+*   **协同机制**: Layer 1 层与 Layer 2 加权决策仲裁层的双层协同，实现对用户借阅行为的准确稳定预测。
+
+---
+
+## 🧠 核心设计理念 (Core Design Philosophy)
+
+### 1. Layer 1: 自校正 (Self-Calibration)
+**—— 寻找变化中的“不变量”**
+
+*   **问题发现**: 在开发 `rv5` 系列模型时，我们发现**改变文本嵌入维度**（Text Embedding Dimension），最终生成的预测结果会有波动。
+*   **自纠正策略**: 我们不依赖单一参数模型，而是将不同维度的变体放入 Layer 1 进行**自纠正**。
+*   **具体实现**:
+    *   通过不断提取不同变体之间的**公共推荐（Intersection）**，赋予这些稳定部分极高的权重。
+    *   找到在不断参数变化中，仍然保持不变的稳定推荐。
+*   **价值**: 这种机制提升了 Layer 2 在加入新模型时的抗干扰能力，为最终投票提供了坚实的“稳定部分”。
+
+### 2. Layer 2: 抗退化仲裁 (Anti-Degradation Arbitration)
+**—— ResNet 式的“跳连不伤主干”**
+
+Layer 2 作为最终决策层，核心目标是确保在引入新模型时，系统性能**单调不减**。
+
+*   **稳定提升逻辑 (补充发现)**:
+    *   差异化模型主要提供“补充发现”。
+    *   即使某个新模型整体表现较差，但它预测正确的**好的样本**会因权重叠加被筛选出来。
+    *   预测错误的**差的样本**因权重小或不被多数模型支持，最终不被采纳。
+*   **抗退化性质**:
+    *   类似于 **ResNet 的跳连结构 (Skip Connection)**。
+    *   新增模型用**小权重**进入体系，其错误影响被上限约束（不会破坏主干）。
+    *   只有当该模型在某些特定 User-Book 对上显著有益时，才会提升总分。
+*   **结果**: 这种机制让我们后续更多的工作量（加入新模型）**不会导致模型性能的退化**，基本分数都是不断提升。
+
+### 3. 跨模型概率可比性校准 (Cross-Model Calibration)
+**—— 解决“概率不可比”痛点**
+
+*   **核心痛点**: 异构模型（如 GNN vs GBDT）输出的概率分布存在显著差异。若直接融合原始概率，会导致高置信度模型（往往是“过自信”的）掩盖其他模型的有效信号，损失多样性与互补性。
+*   **技术解决方案**:
+    1.  **文件内标准化**: 对子模型预测结果进行标准化，消除模型内部的尺度差异。
+    2.  **跨模型权重融合**: 基于验证集性能计算模型权重，只对预测结果进行加权融合，**不再考虑单一模型的置信概率**。
+*   **效果**: 确保了所有模型在公平的跑道上竞争，充分吸收各子模型的优势特征，避免单一模型主导决策，显著提升了集成系统的泛化能力与鲁棒性。
 
 ---
 
 ## 🛠️ 系统架构 (System Architecture)
-
-本方案采用“自校正 -> 全局仲裁”的流式架构，确保数据流从特征提取到最终决策的每一环都具备鲁棒性：
 
 ```mermaid
 graph TD
@@ -66,7 +98,7 @@ graph TD
     %% =======================
     %% 2. 模型变体生成
     %% =======================
-    subgraph Variants ["🧠 模型变体生成"]
+    subgraph Variants ["🧠 模型变体生成 (Model Variants)"]
         M_RV5_A[rv5 (Dim=64)]:::base
         M_RV5_B[rv5 (Dim=128)]:::base
         M_Other[其他异构模型]:::base
@@ -76,17 +108,17 @@ graph TD
     %% =======================
     %% 3. Layer 1: 自校正
     %% =======================
-    subgraph L1 ["🛡️ Layer 1: 概率校准与自校正"]
-        M_RV5_A & M_RV5_B -->|提取共性| SelfCorr[("自校正聚合 (Self-Correction)")]:::layer1
+    subgraph L1 ["🛡️ Layer 1: 自校正 (Self-Correction)"]
+        M_RV5_A & M_RV5_B -->|提取公共部分| SelfCorr[("自校正聚合 (Intersection)")]:::layer1
         SelfCorr -->|高权重稳定输出| Stable_RV5[稳定 rv5 信号]:::layer1
     end
 
     %% =======================
     %% 4. Layer 2: 最终仲裁
     %% =======================
-    subgraph L2 ["⚡ Layer 2: 抗退化仲裁决策"]
+    subgraph L2 ["⚡ Layer 2: 抗退化仲裁 (Anti-Degradation)"]
         Stable_RV5 & M_Other -->|文件内标准化| Norm[标准化处理]:::base
-        Norm -->|ResNet式跳连| Vote[("加权投票 (Weighted Voting)")]:::layer2
+        Norm -->|ResNet式跳连 (小权重接入)| Vote[("加权投票 (Weighted Voting)")]:::layer2
         Vote -->|得分并列| Arbiter{{"⚖️ 顺序仲裁器"}}:::final
     end
 
@@ -96,32 +128,6 @@ graph TD
     Result((submission.csv)):::final
     Arbiter --> Result
 ```
-
----
-
-## 🔍 技术深度解析 (Technical Deep Dive)
-
-### 1. Layer 1: 自校正与概率校准 (Self-Calibration)
-在实验中我们发现，部分深度学习模型（如 `rv5` 系列）对超参数（如文本嵌入维度）敏感，预测结果存在波动。
-*   **自纠正机制**: 我们不依赖单一参数设置，而是训练多个变体（如不同 Embedding 维度）。
-*   **稳定提取**: 将这些变体在 Layer 1 进行“自纠正”——只有在多个变体中都存在的推荐（共性部分）才会被赋予高权重并传递给下一层。
-*   **价值**: 这种机制找到了不断变化中的“稳定不动点”，为 Layer 2 提供了极高置信度的输入。
-
-### 2. Layer 2: 抗退化仲裁决策 (Anti-Degradation Arbitration)
-作为最终决策层，Layer 2 的设计核心是**“抗退化”**，类似于 ResNet 的残差结构。
-*   **稳定提升逻辑**: 差异化模型提供“补充发现”。
-    *   **好样本**: 因多模型权重叠加被筛选出来。
-    *   **差样本**: 因权重小或缺乏多数支持，最终被过滤。
-*   **ResNet 思想**: 新加入的模型（往往是实验性的）以**小权重**进入体系，类似于 ResNet 的跳连结构（Shortcut）。
-    *   如果新模型无效，其微小的权重不会破坏主干（性能不退化）。
-    *   只有当新模型在某些特定 User-Book 对上提供了显著的正确增益时，才会提升总分。
-    *   **结果**: 保证了集成效果的**单调不减**，让我们敢于引入更多差异化模型。
-
-### 3. 跨模型概率可比性校准 (Cross-Model Calibration)
-为了解决异构模型概率分布不可比的问题（例如 GNN 输出倾向于 0.9，而 GBDT 倾向于 0.6），我们采取了激进的校准策略：
-*   **文件内标准化 (In-file Standardization)**: 强制将每个子模型的输出拉伸到统一尺度，消除量纲差异。
-*   **基于权重的纯投票**: 在最终融合时，**不再参考**模型输出的原始概率值，而是完全依赖该模型在验证集上的**权重**进行投票。
-    *   这确保了模型之间是“公平竞争”的，避免了某个“过自信”的模型主导投票，显著提升了系统的泛化能力与鲁棒性。
 
 ---
 
