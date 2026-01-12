@@ -76,56 +76,37 @@ Layer 2 作为最终决策层，核心目标是确保在引入新模型时，系
 ## 🛠️ 系统架构 (System Architecture)
 
 ```mermaid
-graph TD
-    %% =======================
-    %% 🎨 高对比度美化配色 (High Contrast & Modern)
-    %% =======================
-    %% 强制文字黑色(#000)以保证清晰度
-    classDef base fill:#ffffff,stroke:#333333,stroke-width:1px,color:#000000;
-    classDef input fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
-    classDef model fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;
-    classDef l1 fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,stroke-dasharray: 5 5,color:#e65100;
-    classDef l2 fill:#e0f2f1,stroke:#00695c,stroke-width:3px,color:#004d40;
-    classDef final fill:#263238,stroke:#000000,stroke-width:2px,color:#ffffff;
-    
-    %% =======================
-    %% 📐 核心流程
-    %% =======================
-    
-    %% 1. 输入
-    Input("📚 多模态输入数据"):::input
-    
-    %% 2. 模型层
-    subgraph Models ["🧠 模型变体集群"]
-        direction LR
-        style Models fill:#fafafa,stroke:#eeeeee,color:#666
-        RV5_A["rv5 (Dim=64)"]:::model
-        RV5_B["rv5 (Dim=128)"]:::model
-        Other["其他异构模型"]:::model
-    end
-    
-    Input --> Models
-    
-    %% 3. Layer 1 (自校正)
-    L1_Core{{"🛡️ Layer 1: 自校正聚合"}}:::l1
-    
-    %% 连线逻辑
-    RV5_A & RV5_B -->|"提取公共 (Intersection)"| L1_Core
-    
-    %% 4. Layer 2 (仲裁)
-    L2_Vote("⚡ Layer 2: 最终仲裁"):::l2
-    
-    L1_Core ==>|"稳定信号 (高权重)"| L2_Vote
-    Other -.->|"补充信号 (小权重)"| L2_Vote
-    
-    %% 5. 输出
-    Result((submission.csv)):::final
-    L2_Vote --> Result
+graph LR
+    %% 视觉策略：避免大块纯白背景，兼容 GitHub 深色主题
+    classDef input fill:#2d1b69,stroke:#a78bfa,stroke-width:2px,color:#f5f3ff;
+    classDef model fill:#0b2d4a,stroke:#60a5fa,stroke-width:2px,color:#e0f2fe;
+    classDef l1 fill:#3a2500,stroke:#f59e0b,stroke-width:2px,stroke-dasharray: 6 4,color:#fff7ed;
+    classDef l2 fill:#043d3a,stroke:#14b8a6,stroke-width:3px,color:#ecfeff;
+    classDef final fill:#0b0f14,stroke:#94a3b8,stroke-width:2px,color:#ffffff;
 
-    %% =======================
-    %% 🔗 连线样式
-    %% =======================
-    linkStyle default stroke:#666,stroke-width:2px;
+    Input["多模态输入数据"]:::input
+
+    RV5A["rv5 Dim=64"]:::model
+    RV5B["rv5 Dim=128"]:::model
+    Other["其他异构模型"]:::model
+
+    L1["Layer 1 自校正聚合"]:::l1
+    L2["Layer 2 最终仲裁"]:::l2
+    Out((submission.csv)):::final
+
+    Input --> RV5A
+    Input --> RV5B
+    Input --> Other
+
+    RV5A -->|"提取公共"| L1
+    RV5B -->|"提取公共"| L1
+
+    L1 ==>|"稳定信号 高权重"| L2
+    Other -.->|"补充信号 小权重"| L2
+
+    L2 --> Out
+
+    linkStyle default stroke:#94a3b8,stroke-width:2px;
 ```
 
 ---
