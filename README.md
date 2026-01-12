@@ -1,10 +1,13 @@
 # 📚 基于仲裁式双层集成的智能借阅推荐系统
-# (Arbitration-based Two-Layer Ensemble Recommendation System)
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python)
 ![Architecture](https://img.shields.io/badge/Arch-ResNet--Inspired-purple?style=for-the-badge)
 ![Strategy](https://img.shields.io/badge/Strategy-Weighted%20Arbitration-red?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge)
+
+## ⚠️ 注意事项
+
+- **大文件**: 模型权重文件 (`.pkl`, `.joblib`) 未上传 Git，赛友如需完整离线包请联系 `gengsihang2025@163.com`
 
 > 🏆 **决赛核心方案**: 本项目创新性地构建了**“双层加权投票仲裁架构”**。Layer 1 负责概率校准与子模型自校正，输出高质量基准；Layer 2 作为最终决策层，通过加权投票与顺序仲裁，为每个用户选出唯一且稳定的 Top-1 推荐。该方案完美解决了异构模型概率分布不一致的问题，实现了推荐准确率的稳步提升。
 
@@ -21,7 +24,6 @@
 - [快速开始 (Quick Start)](#-快速开始-quick-start)
 - [仓库结构 (Repository Layout)](#-仓库结构-repository-layout)
 - [完整复现 (Full Reproduction)](#-完整复现-full-reproduction)
-- [注意事项 (Notes)](#-注意事项-notes)
 
 ---
 
@@ -164,14 +166,6 @@ python Top10加权融合.py
 # 全量模型标准化 + 加权投票 + 顺序仲裁
 python FINAL加权.py
 ```
-
----
-
-## ⚠️ 注意事项 (Notes)
-
-*   **数据路径**: 请确保 `1data.csv` (复赛) 和 `111data.csv` (决赛) 放置在正确位置。
-*   **运行目录**: 所有 Python 脚本必须在 **项目根目录** 执行。
-*   **大文件**: 模型权重文件 (`.pkl`, `.joblib`) 未上传 Git，如需完整离线包请联系 `a1992423911@dlmu.edu.cn`。
 
 ---
 
