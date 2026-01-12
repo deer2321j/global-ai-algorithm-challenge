@@ -6,7 +6,7 @@
 ![Strategy](https://img.shields.io/badge/Strategy-Weighted%20Arbitration-red?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge)
 
-> 🏆 **决赛核心方案**: 本项目针对跨模态数据融合、用户冷启动及多模型集成中“概率分布不一致”的核心挑战，创新性地提出了**“加权投票为主、顺序仲裁为辅”**的双层集成框架。系统引入 **ResNet 残差思想** 解决集成退化问题，底层结合 **BERT** 与 **GAT** 深度挖掘图文特征，最终实现高精度的图书借阅推荐。
+> 🏆 **决赛核心方案**: 本项目针对跨模态数据融合、用户冷启动及多模型集成中“概率分布不一致”的核心挑战，创新性地提出了**“加权投票为主、顺序仲裁为辅”**的双层集成框架。系统引入 **ResNet 残差思想** 解决集成退化问题，通过 Layer 1 的自校正与 Layer 2 的抗退化仲裁，最终实现高精度的图书借阅推荐。
 
 ---
 
@@ -15,9 +15,9 @@
 - [核心创新 (Key Innovations)](#-核心创新-key-innovations)
 - [系统架构 (System Architecture)](#-系统架构-system-architecture)
 - [技术深度解析 (Technical Deep Dive)](#-技术深度解析-technical-deep-dive)
-    - [双层集成机制 (Two-Layer Ensemble)](#1-双层集成机制-two-layer-ensemble)
-    - [ResNet 残差抗退化设计 (ResNet Anti-Degradation)](#2-resnet-残差抗退化设计-resnet-anti-degradation)
-    - [多模态特征挖掘 (Multi-Modal Mining)](#3-多模态特征挖掘-multi-modal-mining)
+    - [Layer 1: 自校正与概率校准 (Self-Calibration)](#1-layer-1-自校正与概率校准-self-calibration)
+    - [Layer 2: 抗退化仲裁决策 (Anti-Degradation Arbitration)](#2-layer-2-抗退化仲裁决策-anti-degradation-arbitration)
+    - [跨模型概率可比性校准 (Cross-Model Calibration)](#3-跨模型概率可比性校准-cross-model-calibration)
 - [快速开始 (Quick Start)](#-快速开始-quick-start)
 - [仓库结构 (Repository Layout)](#-仓库结构-repository-layout)
 - [完整复现 (Full Reproduction)](#-完整复现-full-reproduction)
@@ -27,72 +27,71 @@
 
 ## ✨ 核心创新 (Key Innovations)
 
-*   **🛡️ 双层仲裁集成 (Two-Layer Arbitration Ensemble)**
-    *   **Layer 1 (鲁棒性)**: 精英模型 Top-10 预融合，构建高置信度基准。
-    *   **Layer 2 (精确性)**: 全量模型加权投票 + **顺序仲裁机制**，解决平票与分布差异问题。
-*   **🧬 ResNet 残差思想 (ResNet-Inspired)**
-    *   构建 $H(x) = F(x) + x$ 的集成范式。以 Layer 1 结果为恒等映射 ($x$)，Layer 2 为残差修正 ($F(x)$)，确保集成效果**单调不减**，解决“越集成越退化”的悖论。
-*   **🧠 多模态深度挖掘 (Deep Multi-Modal Mining)**
-    *   引入 **BERT** 提取文本语义，利用 **GAT (图注意力网络)** 捕捉用户-书籍交互图结构，突破传统统计特征的瓶颈。
+### 1. 🛡️ 双层仲裁集成架构 (Two-Layer Arbitration Ensemble)
+*   **Layer 1 (概率校准与自校正)**: 负责输出高质量的子模型。针对同系列模型（如 `rv5` 不同参数版本）进行内部自洽性验证，提取“不变的稳定部分”赋予高权重，消除随机扰动。
+*   **Layer 2 (加权投票与仲裁)**: 作为最终决策层。通过加权投票为每个用户选出唯一且稳定的 Top-1 推荐。引入 **ResNet 跳连思想**，新模型以小权重接入，保证系统性能**单调不减**。
+
+### 2. ⚖️ 跨模型概率可比性校准 (Probability Comparability)
+*   **痛点**: 异构模型（如 GNN vs GBDT）输出的概率分布差异巨大，直接融合会导致高置信度模型（即使是错误的）掩盖其他有效信号。
+*   **解决方案**:
+    *   **文件内标准化**: 消除模型内部的尺度差异。
+    *   **跨模型权重融合**: 仅基于验证集性能计算投票权重，**忽略单一模型的原始置信概率**，确保所有模型在公平的跑道上竞争，充分吸收互补性。
 
 ---
 
 ## 🛠️ 系统架构 (System Architecture)
 
-本方案采用“漏斗式”决策流，从底层特征挖掘到上层仲裁决策，层层递进：
+本方案采用“自校正 -> 全局仲裁”的流式架构，确保数据流从特征提取到最终决策的每一环都具备鲁棒性：
 
 ```mermaid
 graph TD
     %% =======================
-    %% 🎨 样式定义 (Style Definitions)
+    %% 🎨 样式定义
     %% =======================
     classDef base fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#212529;
     classDef feature fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#0d47a1;
-    classDef model fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#1b5e20;
-    classDef l1 fill:#fff3e0,stroke:#fb8c00,stroke-width:2px,color:#e65100,stroke-dasharray: 5 5;
-    classDef l2 fill:#fce4ec,stroke:#d81b60,stroke-width:2px,color:#880e4f;
+    classDef layer1 fill:#fff3e0,stroke:#fb8c00,stroke-width:2px,color:#e65100;
+    classDef layer2 fill:#fce4ec,stroke:#d81b60,stroke-width:2px,color:#880e4f;
     classDef final fill:#263238,stroke:#263238,stroke-width:3px,color:#fff;
 
     %% =======================
-    %% 1. 数据与特征 (Input Phase)
+    %% 1. 输入与特征
     %% =======================
-    subgraph Input ["🔍 输入与特征"]
-        Data[("📚 多模态数据")]:::base
-        FE[("⚡ BERT + GAT 特征")]:::feature
-        Data --> FE
+    subgraph Input ["🔍 输入与多模态特征"]
+        Data[("📚 原始数据")]:::base
+        Feat[("⚡ BERT + GAT + 统计特征")]:::feature
+        Data --> Feat
     end
 
     %% =======================
-    %% 2. 模型层 (Model Phase)
+    %% 2. 模型变体生成
     %% =======================
-    Pool{{"🧠 差异化模型集群"}}:::model
-    FE --> Pool
+    subgraph Variants ["🧠 模型变体生成"]
+        M_RV5_A[rv5 (Dim=64)]:::base
+        M_RV5_B[rv5 (Dim=128)]:::base
+        M_Other[其他异构模型]:::base
+    end
+    Feat --> M_RV5_A & M_RV5_B & M_Other
 
     %% =======================
-    %% 3. 双层集成 (Ensemble Phase)
+    %% 3. Layer 1: 自校正
     %% =======================
-    subgraph Ensemble ["🛡️ 双层仲裁集成 (ResNet-style)"]
-        direction TB
-        
-        %% 左路: Layer 1 (基准)
-        L1_Node[("Layer 1: Top-10 基准 (x)")]:::l1
-        
-        %% 右路: Layer 2 (修正)
-        L2_Node[("Layer 2: 加权投票 (F(x))")]:::l2
-        
-        %% 核心仲裁
-        Arbiter{{"⚖️ 顺序仲裁器"}}:::final
+    subgraph L1 ["🛡️ Layer 1: 概率校准与自校正"]
+        M_RV5_A & M_RV5_B -->|提取共性| SelfCorr[("自校正聚合 (Self-Correction)")]:::layer1
+        SelfCorr -->|高权重稳定输出| Stable_RV5[稳定 rv5 信号]:::layer1
     end
 
-    %% 连线逻辑
-    Pool -->|筛选精英| L1_Node
-    Pool -->|全量模型| L2_Node
-    
-    L1_Node -->|Shortcut: 兜底保障| Arbiter
-    L2_Node -->|Main: 精确修正| Arbiter
+    %% =======================
+    %% 4. Layer 2: 最终仲裁
+    %% =======================
+    subgraph L2 ["⚡ Layer 2: 抗退化仲裁决策"]
+        Stable_RV5 & M_Other -->|文件内标准化| Norm[标准化处理]:::base
+        Norm -->|ResNet式跳连| Vote[("加权投票 (Weighted Voting)")]:::layer2
+        Vote -->|得分并列| Arbiter{{"⚖️ 顺序仲裁器"}}:::final
+    end
 
     %% =======================
-    %% 4. 输出 (Output)
+    %% 5. 输出
     %% =======================
     Result((submission.csv)):::final
     Arbiter --> Result
@@ -102,29 +101,27 @@ graph TD
 
 ## 🔍 技术深度解析 (Technical Deep Dive)
 
-### 1. 双层集成机制 (Two-Layer Ensemble)
-为解决模型输出概率分布不一致和平票问题，我们构建了严格的双层机制：
+### 1. Layer 1: 自校正与概率校准 (Self-Calibration)
+在实验中我们发现，部分深度学习模型（如 `rv5` 系列）对超参数（如文本嵌入维度）敏感，预测结果存在波动。
+*   **自纠正机制**: 我们不依赖单一参数设置，而是训练多个变体（如不同 Embedding 维度）。
+*   **稳定提取**: 将这些变体在 Layer 1 进行“自纠正”——只有在多个变体中都存在的推荐（共性部分）才会被赋予高权重并传递给下一层。
+*   **价值**: 这种机制找到了不断变化中的“稳定不动点”，为 Layer 2 提供了极高置信度的输入。
 
-*   **Layer 1：构建高可靠性基准 (Reliable Baseline)**
-    *   采用“**文件内标准化 + 跨文件动态加权**”技术。
-    *   消除不同模型量纲差异，确保精英模型结果在统一标准下融合，实现自校正。
-*   **Layer 2：多模型加权仲裁 (Weighted Arbitration)**
-    *   读取所有子模型与 Layer 1 产出进行加权投票。
-    *   **仲裁机制**：当出现得分并列时，严格依据**模型优先级索引**进行仲裁，确保结果的唯一性与可复现性。
+### 2. Layer 2: 抗退化仲裁决策 (Anti-Degradation Arbitration)
+作为最终决策层，Layer 2 的设计核心是**“抗退化”**，类似于 ResNet 的残差结构。
+*   **稳定提升逻辑**: 差异化模型提供“补充发现”。
+    *   **好样本**: 因多模型权重叠加被筛选出来。
+    *   **差样本**: 因权重小或缺乏多数支持，最终被过滤。
+*   **ResNet 思想**: 新加入的模型（往往是实验性的）以**小权重**进入体系，类似于 ResNet 的跳连结构（Shortcut）。
+    *   如果新模型无效，其微小的权重不会破坏主干（性能不退化）。
+    *   只有当新模型在某些特定 User-Book 对上提供了显著的正确增益时，才会提升总分。
+    *   **结果**: 保证了集成效果的**单调不减**，让我们敢于引入更多差异化模型。
 
-### 2. ResNet 残差抗退化设计 (ResNet Anti-Degradation)
-针对集成学习中引入弱模型可能导致效果下降的“退化悖论”，我们复刻了 ResNet 的核心思想：
-
-> **公式**: $H(x) = F(x) + x$
-
-*   **$x$ (恒等基准)**: 由 Layer 1 精英模型结果构成，相当于 ResNet 的 Shortcut，提供**性能下界兜底**。
-*   **$F(x)$ (残差修正)**: 由 Layer 2 全量模型投票构成，旨在捕捉额外的增量信息。
-*   **价值**: 这种设计赋予系统“敢于加深”的底气。即使 Layer 2 引入了噪声，Layer 1 的存在也能保证最终效果不低于单体精英模型。
-
-### 3. 多模态特征挖掘 (Multi-Modal Mining)
-推荐系统的上限由特征决定。我们超越传统机器学习，引入深度学习特征：
-*   **BERT**: 提取书籍简介、评论的深层语义特征。
-*   **GNN (图神经网络)**: 构建“用户-书籍”异构图，利用 GAT 捕捉高阶协同过滤信号，解决冷启动问题。
+### 3. 跨模型概率可比性校准 (Cross-Model Calibration)
+为了解决异构模型概率分布不可比的问题（例如 GNN 输出倾向于 0.9，而 GBDT 倾向于 0.6），我们采取了激进的校准策略：
+*   **文件内标准化 (In-file Standardization)**: 强制将每个子模型的输出拉伸到统一尺度，消除量纲差异。
+*   **基于权重的纯投票**: 在最终融合时，**不再参考**模型输出的原始概率值，而是完全依赖该模型在验证集上的**权重**进行投票。
+    *   这确保了模型之间是“公平竞争”的，避免了某个“过自信”的模型主导投票，显著提升了系统的泛化能力与鲁棒性。
 
 ---
 
@@ -146,10 +143,10 @@ python FINAL加权.py
 ```text
 .
 ├── 📜 FINAL加权.py                # 🔥 Layer 2 核心：最终仲裁与加权脚本 -> submission.csv
-├── 📜 Top10加权融合.py            # �️ Layer 1 核心：Top-10 基准生成 -> top10加权输出结果.csv
-├── 📜 整合rv5到最终投票.py         # � 辅助：v5 模型结果标准化
+├── 📜 Top10加权融合.py            # 🛡️ Layer 1 核心：Top-10 基准生成 -> top10加权输出结果.csv
+├── 📜 整合rv5到最终投票.py         # 🔧 Layer 1 核心：rv5 自校正与标准化 -> 七以上的v5.csv
 ├── 📂 23混推/                     # 🧠 子模型：混合推荐策略
-├── 📂 v5/                        # 🧠 子模型：v5 版本
+├── 📂 v5/                        # 🧠 子模型：v5 系列 (含自校正逻辑)
 ├── 📂 dspos2/                    # 🧠 子模型：dspos2 版本
 ├── 📂 133/                       # 🧠 子模型：133 版本
 ├── 📂 f1/                        # 🧠 子模型：f1 版本
@@ -169,15 +166,16 @@ python FINAL加权.py
 ### 2. 执行双层集成 (Execute Ensemble)
 
 ```bash
-# Step 1: 准备 v5 结果 (Layer 1 预处理)
+# Step 1: Layer 1 自校正 (Self-Correction)
+# 对 rv5 系列进行内部加权与标准化，提取稳定信号
 python 整合rv5到最终投票.py
 
-# Step 2: 生成 Layer 1 基准 (Top-10 加权)
-# 对应理论中的 "x" (Shortcut)
+# Step 2: 准备基准数据
+# 生成 Top-10 辅助基准
 python Top10加权融合.py
 
-# Step 3: 执行 Layer 2 最终仲裁 (Final Arbitration)
-# 对应理论中的 "H(x) = F(x) + x"
+# Step 3: Layer 2 最终仲裁 (Final Arbitration)
+# 全量模型标准化 + 加权投票 + 顺序仲裁
 python FINAL加权.py
 ```
 
