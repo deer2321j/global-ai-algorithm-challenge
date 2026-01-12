@@ -43,40 +43,59 @@
 
 ```mermaid
 graph TD
-    subgraph FeatureEng ["� 底层特征工程 (Feature Engineering)"]
-        Data[多模态原始数据]
-        Data -->|语义理解| BERT[BERT 文本向量]
-        Data -->|关系建模| GAT[GAT 图神经网络]
-        Data -->|统计特征| Stat[统计/交互特征]
+    %% =======================
+    %% 🎨 样式定义 (Style Definitions)
+    %% =======================
+    classDef base fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#212529;
+    classDef feature fill:#e3f2fd,stroke:#1e88e5,stroke-width:2px,color:#0d47a1;
+    classDef model fill:#e8f5e9,stroke:#43a047,stroke-width:2px,color:#1b5e20;
+    classDef l1 fill:#fff3e0,stroke:#fb8c00,stroke-width:2px,color:#e65100,stroke-dasharray: 5 5;
+    classDef l2 fill:#fce4ec,stroke:#d81b60,stroke-width:2px,color:#880e4f;
+    classDef final fill:#263238,stroke:#263238,stroke-width:3px,color:#fff;
+
+    %% =======================
+    %% 1. 数据与特征 (Input Phase)
+    %% =======================
+    subgraph Input ["🔍 输入与特征"]
+        Data[("📚 多模态数据")]:::base
+        FE[("⚡ BERT + GAT 特征")]:::feature
+        Data --> FE
     end
 
-    subgraph BaseModels ["🧠 差异化模型集群 (Model Cluster)"]
-        BERT & GAT & Stat --> M_Cat[CatBoost 集群]
-        BERT & GAT & Stat --> M_LGB[LightGBM 集群]
-        BERT & GAT & Stat --> M_DL[深度/规则模型]
+    %% =======================
+    %% 2. 模型层 (Model Phase)
+    %% =======================
+    Pool{{"🧠 差异化模型集群"}}:::model
+    FE --> Pool
+
+    %% =======================
+    %% 3. 双层集成 (Ensemble Phase)
+    %% =======================
+    subgraph Ensemble ["🛡️ 双层仲裁集成 (ResNet-style)"]
+        direction TB
+        
+        %% 左路: Layer 1 (基准)
+        L1_Node[("Layer 1: Top-10 基准 (x)")]:::l1
+        
+        %% 右路: Layer 2 (修正)
+        L2_Node[("Layer 2: 加权投票 (F(x))")]:::l2
+        
+        %% 核心仲裁
+        Arbiter{{"⚖️ 顺序仲裁器"}}:::final
     end
 
-    subgraph Layer1 ["🛡️ Layer 1: 鲁棒性基准 (The Shortcut 'x')"]
-        M_Cat & M_LGB & M_DL -.->|筛选精英模型| Elite[精英模型 Top-10]
-        Elite -->|文件内标准化 + 动态加权| L1_Out[Layer 1 基准结果]
-        style L1_Out fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    end
+    %% 连线逻辑
+    Pool -->|筛选精英| L1_Node
+    Pool -->|全量模型| L2_Node
+    
+    L1_Node -->|Shortcut: 兜底保障| Arbiter
+    L2_Node -->|Main: 精确修正| Arbiter
 
-    subgraph Layer2 ["⚡ Layer 2: 精确仲裁 (The Residual 'F(x)')"]
-        M_Cat & M_LGB & M_DL -->|全量输入| Voting[全量加权投票]
-        L1_Out -->|锚点输入| Voting
-        Voting -->|得分并列/冲突| Arbiter{顺序仲裁器}
-        Arbiter -->|优先级索引| FinalDec[最终决策]
-        style FinalDec fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
-    end
-
-    L1_Out -.->|ResNet 思想: 兜底保障| FinalDec
-
-    subgraph Output ["🎯 最终产出"]
-        FinalDec --> Sub((submission.csv))
-    end
-
-    style Sub fill:#ffccbc,stroke:#bf360c,stroke-width:4px
+    %% =======================
+    %% 4. 输出 (Output)
+    %% =======================
+    Result((submission.csv)):::final
+    Arbiter --> Result
 ```
 
 ---
